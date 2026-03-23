@@ -64,3 +64,6 @@ scripts/build-win.js
 scripts/copy-native-deps.js
 scripts/verify-pkg.js
 scripts/list-models.js
+
+# Private Directory
+private/
