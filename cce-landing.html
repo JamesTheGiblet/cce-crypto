@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CCE — Cascade Compounding Engine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Mono:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --black: #050508;
+    --deep: #0a0a12;
+    --card: #0f0f1a;
+    --border: #1a1a2e;
+    --gold: #c8a84b;
+    --gold2: #e8c96d;
+    --amber: #ff9500;
+    --red: #ef4444;
+    --green: #22c55e;
+    --cyan: #00d4ff;
+    --dim: #444466;
+    --mid: #778899;
+    --text: #c8ccd8;
+    --white: #f0f2f8;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--black);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 300;
+    overflow-x: hidden;
+  }
+
+  /* ── NOISE OVERLAY ── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 1000;
+    opacity: 0.4;
+  }
+
+  /* ── SCANLINE ── */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
+    pointer-events: none;
+    z-index: 999;
+  }
+
+  /* ── NAV ── */
+  nav {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    padding: 16px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: linear-gradient(to bottom, rgba(5,5,8,0.95), transparent);
+    backdrop-filter: blur(8px);
+  }
+
+  .nav-logo {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.5rem;
+    letter-spacing: 4px;
+    color: var(--gold);
+    text-shadow: 0 0 20px rgba(200,168,75,0.4);
+  }
+
+  .nav-badge {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 2px;
+    color: var(--green);
+    border: 1px solid var(--green);
+    padding: 3px 8px;
+    border-radius: 2px;
+    text-transform: uppercase;
+    animation: pulse-badge 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse-badge {
+    0%, 100% { opacity: 1; box-shadow: 0 0 8px rgba(34,197,94,0.3); }
+    50% { opacity: 0.7; box-shadow: 0 0 16px rgba(34,197,94,0.6); }
+  }
+
+  /* ── HERO ── */
+  .hero {
+    min-height: 100svh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 100px 24px 60px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .hero-bg {
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 80% 60% at 50% 0%, rgba(200,168,75,0.08) 0%, transparent 60%),
+      radial-gradient(ellipse 40% 40% at 20% 80%, rgba(0,212,255,0.05) 0%, transparent 50%),
+      radial-gradient(ellipse 40% 40% at 80% 80%, rgba(239,68,68,0.04) 0%, transparent 50%);
+  }
+
+  .hero-grid {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(200,168,75,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(200,168,75,0.04) 1px, transparent 1px);
+    background-size: 60px 60px;
+    mask-image: radial-gradient(ellipse at center, black 30%, transparent 80%);
+  }
+
+  .hero-eyebrow {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 5px;
+    color: var(--gold);
+    text-transform: uppercase;
+    margin-bottom: 20px;
+    opacity: 0;
+    animation: fade-up 0.8s ease forwards 0.2s;
+  }
+
+  .hero-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(3.5rem, 16vw, 9rem);
+    line-height: 0.9;
+    letter-spacing: 2px;
+    color: var(--white);
+    margin-bottom: 8px;
+    opacity: 0;
+    animation: fade-up 0.8s ease forwards 0.4s;
+  }
+
+  .hero-title span {
+    background: linear-gradient(135deg, var(--gold), var(--gold2), var(--amber));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .hero-sub {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(1.2rem, 5vw, 2.4rem);
+    letter-spacing: 6px;
+    color: var(--dim);
+    margin-bottom: 32px;
+    opacity: 0;
+    animation: fade-up 0.8s ease forwards 0.6s;
+  }
+
+  .hero-desc {
+    max-width: 480px;
+    font-size: 0.95rem;
+    line-height: 1.7;
+    color: var(--mid);
+    margin-bottom: 48px;
+    opacity: 0;
+    animation: fade-up 0.8s ease forwards 0.8s;
+  }
+
+  .hero-stats {
+    display: flex;
+    gap: 32px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: 48px;
+    opacity: 0;
+    animation: fade-up 0.8s ease forwards 1s;
+  }
+
+  .hero-stat {
+    text-align: center;
+  }
+
+  .hero-stat-val {
+    font-family: 'Space Mono', monospace;
+    font-size: 1.6rem;
+    color: var(--gold);
+    display: block;
+    line-height: 1;
+    text-shadow: 0 0 20px rgba(200,168,75,0.4);
+  }
+
+  .hero-stat-lbl {
+    font-size: 0.65rem;
+    letter-spacing: 3px;
+    color: var(--dim);
+    text-transform: uppercase;
+    margin-top: 4px;
+    display: block;
+  }
+
+  .hero-cta {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: center;
+    opacity: 0;
+    animation: fade-up 0.8s ease forwards 1.2s;
+  }
+
+  .btn-primary {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    background: linear-gradient(135deg, var(--gold), var(--amber));
+    color: var(--black);
+    border: none;
+    padding: 14px 28px;
+    cursor: pointer;
+    text-decoration: none;
+    font-weight: 700;
+    transition: transform 0.2s, box-shadow 0.2s;
+    clip-path: polygon(8px 0%, 100% 0%, calc(100% - 8px) 100%, 0% 100%);
+  }
+
+  .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 30px rgba(200,168,75,0.4);
+  }
+
+  .btn-secondary {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    background: transparent;
+    color: var(--gold);
+    border: 1px solid var(--gold);
+    padding: 14px 28px;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background 0.2s, box-shadow 0.2s;
+    clip-path: polygon(8px 0%, 100% 0%, calc(100% - 8px) 100%, 0% 100%);
+  }
+
+  .btn-secondary:hover {
+    background: rgba(200,168,75,0.1);
+    box-shadow: 0 0 20px rgba(200,168,75,0.2);
+  }
+
+  /* ── TICKER ── */
+  .ticker {
+    background: var(--deep);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 0;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .ticker-track {
+    display: flex;
+    gap: 48px;
+    animation: ticker 30s linear infinite;
+    width: max-content;
+  }
+
+  .ticker-item {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 2px;
+    color: var(--mid);
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .ticker-item .dot { width: 5px; height: 5px; border-radius: 50%; }
+  .dot-green { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .dot-amber { background: var(--amber); box-shadow: 0 0 6px var(--amber); }
+  .dot-red { background: var(--red); box-shadow: 0 0 6px var(--red); }
+  .dot-cyan { background: var(--cyan); box-shadow: 0 0 6px var(--cyan); }
+
+  @keyframes ticker {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+
+  /* ── SECTION ── */
+  section {
+    padding: 80px 24px;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  .section-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 5px;
+    color: var(--gold);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .section-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(to right, var(--border), transparent);
+  }
+
+  .section-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(2rem, 8vw, 4rem);
+    letter-spacing: 2px;
+    color: var(--white);
+    line-height: 1;
+    margin-bottom: 20px;
+  }
+
+  .section-body {
+    font-size: 0.95rem;
+    line-height: 1.8;
+    color: var(--mid);
+    max-width: 600px;
+  }
+
+  /* ── ECOSYSTEM ── */
+  .ecosystem {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 2px;
+    margin-top: 48px;
+  }
+
+  .eco-group {
+    background: var(--card);
+    border: 1px solid var(--border);
+    overflow: hidden;
+  }
+
+  .eco-group-header {
+    padding: 14px 20px;
+    background: rgba(200,168,75,0.05);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .eco-group-name {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 4px;
+    color: var(--gold);
+    text-transform: uppercase;
+  }
+
+  .eco-group-desc {
+    font-size: 0.7rem;
+    color: var(--dim);
+  }
+
+  .eco-engine {
+    padding: 12px 20px;
+    border-bottom: 1px solid rgba(26,26,46,0.5);
+    display: grid;
+    grid-template-columns: 80px 1fr auto;
+    align-items: center;
+    gap: 16px;
+    transition: background 0.2s;
+  }
+
+  .eco-engine:last-child { border-bottom: none; }
+  .eco-engine:hover { background: rgba(200,168,75,0.03); }
+
+  .eco-engine-name {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--text);
+    letter-spacing: 1px;
+  }
+
+  .eco-engine-desc {
+    font-size: 0.75rem;
+    color: var(--dim);
+    line-height: 1.4;
+  }
+
+  .eco-status {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.55rem;
+    letter-spacing: 2px;
+    padding: 3px 8px;
+    border-radius: 1px;
+    white-space: nowrap;
+  }
+
+  .status-live { color: var(--green); border: 1px solid rgba(34,197,94,0.3); background: rgba(34,197,94,0.05); }
+  .status-watch { color: var(--amber); border: 1px solid rgba(255,149,0,0.3); background: rgba(255,149,0,0.05); }
+  .status-dry { color: var(--cyan); border: 1px solid rgba(0,212,255,0.3); background: rgba(0,212,255,0.05); }
+  .status-caution { color: var(--red); border: 1px solid rgba(239,68,68,0.3); background: rgba(239,68,68,0.05); }
+  .status-active { color: #a855f7; border: 1px solid rgba(168,85,247,0.3); background: rgba(168,85,247,0.05); }
+
+  /* ── PHILOSOPHY ── */
+  .philosophy {
+    background: var(--deep);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    padding: 80px 24px;
+  }
+
+  .philosophy-inner {
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  .quote-block {
+    border-left: 3px solid var(--gold);
+    padding: 24px 28px;
+    background: rgba(200,168,75,0.04);
+    margin: 40px 0;
+  }
+
+  .quote-text {
+    font-family: 'Space Mono', monospace;
+    font-size: clamp(0.85rem, 2vw, 1.05rem);
+    color: var(--text);
+    line-height: 1.8;
+    font-style: italic;
+  }
+
+  .quote-source {
+    font-size: 0.7rem;
+    letter-spacing: 3px;
+    color: var(--gold);
+    text-transform: uppercase;
+    margin-top: 12px;
+  }
+
+  .pillars {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px;
+    margin-top: 40px;
+  }
+
+  @media (max-width: 480px) {
+    .pillars { grid-template-columns: 1fr; }
+  }
+
+  .pillar {
+    background: var(--card);
+    border: 1px solid var(--border);
+    padding: 24px;
+  }
+
+  .pillar-num {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 3rem;
+    color: var(--border);
+    line-height: 1;
+    margin-bottom: 8px;
+  }
+
+  .pillar-title {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 3px;
+    color: var(--gold);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  .pillar-body {
+    font-size: 0.8rem;
+    color: var(--mid);
+    line-height: 1.6;
+  }
+
+  /* ── ARCHITECTURE ── */
+  .arch-diagram {
+    background: var(--card);
+    border: 1px solid var(--border);
+    padding: 28px;
+    margin-top: 40px;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--mid);
+    line-height: 2;
+    overflow-x: auto;
+  }
+
+  .arch-diagram .hl { color: var(--gold); }
+  .arch-diagram .hl2 { color: var(--cyan); }
+  .arch-diagram .hl3 { color: var(--green); }
+  .arch-diagram .hl4 { color: var(--amber); }
+
+  /* ── LIVE SIGNALS ── */
+  .signals-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 2px;
+    margin-top: 40px;
+  }
+
+  @media (max-width: 400px) {
+    .signals-grid { grid-template-columns: 1fr; }
+  }
+
+  .signal-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .signal-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+
+  .signal-card.fear::before { background: var(--red); }
+  .signal-card.neutral::before { background: var(--mid); }
+  .signal-card.dormant::before { background: var(--dim); }
+  .signal-card.watch::before { background: var(--amber); }
+
+  .signal-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.55rem;
+    letter-spacing: 3px;
+    color: var(--dim);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .signal-val {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2.2rem;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+
+  .signal-sub {
+    font-size: 0.7rem;
+    color: var(--dim);
+  }
+
+  /* ── MOTTO ── */
+  .motto-section {
+    text-align: center;
+    padding: 100px 24px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .motto-bg {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 60% 60% at 50% 50%, rgba(200,168,75,0.06) 0%, transparent 70%);
+  }
+
+  .motto-text {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(1.8rem, 7vw, 4rem);
+    letter-spacing: 3px;
+    color: var(--white);
+    line-height: 1.3;
+    position: relative;
+    z-index: 1;
+  }
+
+  .motto-text em {
+    font-style: normal;
+    background: linear-gradient(135deg, var(--gold), var(--amber));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .motto-sub {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 4px;
+    color: var(--dim);
+    margin-top: 20px;
+    text-transform: uppercase;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ── FOOTER ── */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 32px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: gap;
+    gap: 16px;
+  }
+
+  .footer-logo {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.2rem;
+    letter-spacing: 4px;
+    color: var(--gold);
+  }
+
+  .footer-copy {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.55rem;
+    letter-spacing: 2px;
+    color: var(--dim);
+    text-align: right;
+  }
+
+  /* ── ANIMATIONS ── */
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .reveal {
+    opacity: 0;
+    transform: translateY(30px);
+    transition: opacity 0.7s ease, transform 0.7s ease;
+  }
+
+  .reveal.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* ── MOBILE ── */
+  @media (max-width: 600px) {
+    .eco-engine { grid-template-columns: 1fr auto; }
+    .eco-engine-name { grid-column: 1; }
+    .eco-engine-desc { grid-column: 1 / -1; grid-row: 2; }
+    footer { flex-direction: column; text-align: center; }
+    .footer-copy { text-align: center; }
+  }
+
+  /* ── SCROLLBAR ── */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--black); }
+  ::-webkit-scrollbar-thumb { background: var(--border); }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-logo">CCE</div>
+  <div class="nav-badge">● LIVE v2.3</div>
+</nav>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-bg"></div>
+  <div class="hero-grid"></div>
+
+  <p class="hero-eyebrow">Giblets Creations · Autonomous Trading OS</p>
+  <h1 class="hero-title">CASCADE<br><span>COMPOUNDING</span><br>ENGINE</h1>
+  <p class="hero-sub">Platform Core · v2.3.8</p>
+  <p class="hero-desc">11 autonomous trading engines. 3 ecosystems. One Samsung S24 Ultra. Running 24/7 on a phone in your pocket.</p>
+
+  <div class="hero-stats">
+    <div class="hero-stat">
+      <span class="hero-stat-val">11</span>
+      <span class="hero-stat-lbl">Engines</span>
+    </div>
+    <div class="hero-stat">
+      <span class="hero-stat-val">3</span>
+      <span class="hero-stat-lbl">Ecosystems</span>
+    </div>
+    <div class="hero-stat">
+      <span class="hero-stat-val">3W</span>
+      <span class="hero-stat-lbl">Build Time</span>
+    </div>
+    <div class="hero-stat">
+      <span class="hero-stat-val">31</span>
+      <span class="hero-stat-lbl">Tests Pass</span>
+    </div>
+  </div>
+
+  <div class="hero-cta">
+    <a href="#engines" class="btn-primary">View Engines</a>
+    <a href="#philosophy" class="btn-secondary">Read Philosophy</a>
+  </div>
+</div>
+
+<!-- TICKER -->
+<div class="ticker">
+  <div class="ticker-track">
+    <div class="ticker-item"><span class="dot dot-green"></span>S.E CRYPTO · DORMANT · $291.70</div>
+    <div class="ticker-item"><span class="dot dot-amber"></span>S.E REIT · WATCHING · FED 3.64%</div>
+    <div class="ticker-item"><span class="dot dot-amber"></span>S.E COMO · WATCHING · OIL $92</div>
+    <div class="ticker-item"><span class="dot dot-red"></span>S.E EGP · CAUTION · DIVERGENCE ACTIVE</div>
+    <div class="ticker-item"><span class="dot dot-cyan"></span>T.E GRID · ACTIVE · 10 ORDERS</div>
+    <div class="ticker-item"><span class="dot dot-cyan"></span>T.E MOM · STANDBY · BTC/ETH/SOL</div>
+    <div class="ticker-item"><span class="dot dot-cyan"></span>T.E BRK · SCANNING · 10 SQUEEZES</div>
+    <div class="ticker-item"><span class="dot dot-cyan"></span>T.E LCE · DORMANT · HUNTING</div>
+    <div class="ticker-item"><span class="dot dot-green"></span>O.E OBS · ACTIVE · 200+ SNAPSHOTS</div>
+    <div class="ticker-item"><span class="dot dot-red"></span>O.E SEN · ALERT · 3 ANOMALIES</div>
+    <!-- duplicate for seamless loop -->
+    <div class="ticker-item"><span class="dot dot-green"></span>S.E CRYPTO · DORMANT · $291.70</div>
+    <div class="ticker-item"><span class="dot dot-amber"></span>S.E REIT · WATCHING · FED 3.64%</div>
+    <div class="ticker-item"><span class="dot dot-amber"></span>S.E COMO · WATCHING · OIL $92</div>
+    <div class="ticker-item"><span class="dot dot-red"></span>S.E EGP · CAUTION · DIVERGENCE ACTIVE</div>
+    <div class="ticker-item"><span class="dot dot-cyan"></span>T.E GRID · ACTIVE · 10 ORDERS</div>
+    <div class="ticker-item"><span class="dot dot-cyan"></span>T.E MOM · STANDBY · BTC/ETH/SOL</div>
+    <div class="ticker-item"><span class="dot dot-cyan"></span>T.E BRK · SCANNING · 10 SQUEEZES</div>
+    <div class="ticker-item"><span class="dot dot-cyan"></span>T.E LCE · DORMANT · HUNTING</div>
+    <div class="ticker-item"><span class="dot dot-green"></span>O.E OBS · ACTIVE · 200+ SNAPSHOTS</div>
+    <div class="ticker-item"><span class="dot dot-red"></span>O.E SEN · ALERT · 3 ANOMALIES</div>
+  </div>
+</div>
+
+<!-- ENGINES -->
+<section id="engines">
+  <p class="section-label reveal">Engine Roster</p>
+  <h2 class="section-title reveal">THREE<br>ECOSYSTEMS</h2>
+  <p class="section-body reveal">Every engine is a self-contained autonomous module with its own state machine, data feed, storage layer, and decision logic. They share only two things: the notification service and the process runtime.</p>
+
+  <div class="ecosystem reveal">
+
+    <!-- S.E -->
+    <div class="eco-group">
+      <div class="eco-group-header">
+        <span class="eco-group-name">S.E — Strategic Engines</span>
+        <span class="eco-group-desc">Patient · Macro-driven · Days to weeks</span>
+      </div>
+      <div class="eco-engine">
+        <span class="eco-engine-name">S.E CRYPTO</span>
+        <span class="eco-engine-desc">7-state compounding FSM · BTC/ETH/SOL · Kraken · 4H cycle</span>
+        <span class="eco-status status-live">LIVE</span>
+      </div>
+      <div class="eco-engine">
+        <span class="eco-engine-name">S.E FOREX</span>
+        <span class="eco-engine-desc">EUR/USD oversold fade · Z-score + RSI · Session-aware · 1H cycle</span>
+        <span class="eco-status status-dry">DRY RUN</span>
+      </div>
+      <div class="eco-engine">
+        <span class="eco-engine-name">S.E REIT</span>
+        <span class="eco-engine-desc">Interest rate lag exploitation · O Realty · Fed + Treasury signals</span>
+        <span class="eco-status status-watch">WATCHING</span>
+      </div>
+      <div class="eco-engine">
+        <span class="eco-engine-name">S.E STOCKS</span>
+        <span class="eco-engine-desc">SPY dual momentum · VIX + breadth + volume filter · 24H cycle</span>
+        <span class="eco-status status-dry">DRY RUN</span>
+      </div>
+      <div class="eco-engine">
+        <span class="eco-engine-name">S.E COMO</span>
+        <span class="eco-engine-desc">Oil → Gold → Copper cascade · DXY filter · Cross-asset confirmation</span>
+        <span class="eco-status status-watch">WATCHING</span>
+      </div>
+      <div class="eco-engine">
+        <span class="eco-engine-name">S.E EGP</span>
+        <span class="eco-engine-desc">USD/EGP regime classification · CBE policy + inflation + reserves</span>
+        <span class="eco-status status-caution">CAUTION</span>
+      </div>
+    </div>
+
+    <!-- T.E -->
+    <div class="eco-group">
+      <div class="eco-group-header">
+        <span class="eco-group-name">T.E — Tactical Engines</span>
+        <span class="eco-group-desc">Active · Mechanical · Minutes to hours</span>
+      </div>
+      <div class="eco-engine">
+        <span class="eco-engine-name">T.E GRID</span>
+        <span class="eco-engine-desc">BTC/USDC grid trading · 10 levels · 1% spacing · 5min cycle</span>
+        <span class="eco-status status-active">ACTIVE</span>
+      </div>
+      <div class="eco-engine">
+        <span class="eco-engine-name">T.E MOM</span>
+        <span class="eco-engine-desc">EMA crossover momentum · BTC/ETH/SOL · ATR stops · 2H cycle</span>
+        <span class="eco-status status-dry">STANDBY</span>
+      </div>
+      <div class="eco-engine">
+        <span class="eco-engine-name">T.E BRK</span>
+        <span class="eco-engine-desc">Bollinger Band squeeze detection · Volume breakout · 1H cycle</span>
+        <span class="eco-status status-dry">SCANNING</span>
+      </div>
+      <div class="eco-engine">
+        <span class="eco-engine-name">T.E LCE</span>
+        <span class="eco-engine-desc">Liquidation cascade hunter · $20M+ liq threshold · 5min cycle</span>
+        <span class="eco-status status-dry">DORMANT</span>
+      </div>
+    </div>
+
+    <!-- O.E -->
+    <div class="eco-group">
+      <div class="eco-group-header">
+        <span class="eco-group-name">O.E — Observer Engines</span>
+        <span class="eco-group-desc">Passive · Intelligence · Never trades</span>
+      </div>
+      <div class="eco-engine">
+        <span class="eco-engine-name">O.E OBS</span>
+        <span class="eco-engine-desc">Cross-engine snapshots every 15min · 200+ observations logged</span>
+        <span class="eco-status status-active">ACTIVE</span>
+      </div>
+      <div class="eco-engine">
+        <span class="eco-engine-name">O.E SEN</span>
+        <span class="eco-engine-desc">Anomaly detection · EGP divergence + Oil/Gold correlation flagged</span>
+        <span class="eco-status status-caution">ALERT</span>
+      </div>
+      <div class="eco-engine">
+        <span class="eco-engine-name">O.E STR</span>
+        <span class="eco-engine-desc">Pattern analysis + recommendations · Enables at 96 observations</span>
+        <span class="eco-status status-dry">WAITING</span>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- PHILOSOPHY -->
+<div class="philosophy" id="philosophy">
+  <div class="philosophy-inner">
+    <p class="section-label reveal">Design Principles</p>
+    <h2 class="section-title reveal">THE PHILOSOPHY</h2>
+
+    <div class="quote-block reveal">
+      <p class="quote-text">"S.E engines are weather vanes — they point in the direction of the macro wind. T.E engines are waterwheels — they extract energy from flow regardless of direction. O.E engines are memory — they watch everything and build the dataset that will eventually power autonomous cross-engine intelligence."</p>
+      <p class="quote-source">— CCE Platform Philosophy</p>
+    </div>
+
+    <div class="pillars reveal">
+      <div class="pillar">
+        <div class="pillar-num">01</div>
+        <div class="pillar-title">No Prediction</div>
+        <div class="pillar-body">The system reacts to confirmed signals. It never forecasts. A weather vane is always correct. A weather forecast is often wrong.</div>
+      </div>
+      <div class="pillar">
+        <div class="pillar-num">02</div>
+        <div class="pillar-title">No Emotion</div>
+        <div class="pillar-body">State transitions follow strict mathematical logic. Every decision is deterministic and auditable. Fear and greed are inputs, not drivers.</div>
+      </div>
+      <div class="pillar">
+        <div class="pillar-num">03</div>
+        <div class="pillar-title">Environment First</div>
+        <div class="pillar-body">Capital deploys only when the environment — described by the combination of signals — reaches a state that historically precedes the target move.</div>
+      </div>
+      <div class="pillar">
+        <div class="pillar-num">04</div>
+        <div class="pillar-title">Full Transparency</div>
+        <div class="pillar-body">Every signal, state, trade, and metric is logged to SQLite. Nothing happens without a record. The system is always auditable.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ARCHITECTURE -->
+<section id="architecture">
+  <p class="section-label reveal">Technical Stack</p>
+  <h2 class="section-title reveal">ARCHITECTURE</h2>
+  <p class="section-body reveal">Single Node.js process. PM2 daemon. sql.js for Android-compatible SQLite. Telegram alerts. Express dashboard. All running on a Samsung S24 Ultra via Termux.</p>
+
+  <div class="arch-diagram reveal">
+    <span class="hl">PM2 Process Manager</span><br>
+    ├── <span class="hl2">cce-bot</span> (Node.js · index.js)<br>
+    │   ├── <span class="hl">S.E</span> Crypto · Forex · REIT · Stocks · COMO · EGP<br>
+    │   ├── <span class="hl4">T.E</span> Grid · Momentum · Breakout · LCE<br>
+    │   ├── <span class="hl3">O.E</span> Observer · Sentinel · Strategist<br>
+    │   └── Shared: NotificationService · DXY Layer · Exchange Connector<br>
+    │<br>
+    └── <span class="hl2">dashboard</span> (Express · port 3000)<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;├── <span class="hl">GET /</span> → Command Dashboard<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;├── <span class="hl">GET /forge</span> → Forge HQ PWA<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;└── <span class="hl">API</span> /api/[engine]/status · trades · history
+  </div>
+
+  <div class="signals-grid reveal">
+    <div class="signal-card fear">
+      <div class="signal-label">Fear & Greed</div>
+      <div class="signal-val" style="color: var(--red);">8</div>
+      <div class="signal-sub">Extreme Fear · Mar 23</div>
+    </div>
+    <div class="signal-card neutral">
+      <div class="signal-label">BTC Dominance</div>
+      <div class="signal-val" style="color: var(--gold);">56.5%</div>
+      <div class="signal-sub">Accumulation regime</div>
+    </div>
+    <div class="signal-card dormant">
+      <div class="signal-label">VIX</div>
+      <div class="signal-val" style="color: var(--amber);">26.4</div>
+      <div class="signal-sub">Elevated · CME dormant</div>
+    </div>
+    <div class="signal-card watch">
+      <div class="signal-label">Oil/Gold Corr</div>
+      <div class="signal-val" style="color: var(--red);">-0.57</div>
+      <div class="signal-sub">Breakdown · Sentinel alert</div>
+    </div>
+  </div>
+</section>
+
+<!-- MOTTO -->
+<div class="motto-section">
+  <div class="motto-bg"></div>
+  <p class="motto-text reveal">
+    I WANTED IT.<br>
+    SO I <em>FORGED</em> IT.<br>
+    NOW FORGE YOURS.
+  </p>
+  <p class="motto-sub reveal">Giblets Creations · Built in 3 weeks · March 2026</p>
+</div>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-logo">CCE</div>
+  <div class="footer-copy">
+    CASCADE COMPOUNDING ENGINE · v2.3.8<br>
+    GIBLETS CREATIONS · INTERNAL · NOT FOR DISTRIBUTION
+  </div>
+</footer>
+
+<script>
+  // Scroll reveal
+  const reveals = document.querySelectorAll('.reveal');
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry, i) => {
+      if (entry.isIntersecting) {
+        setTimeout(() => entry.target.classList.add('visible'), i * 80);
+        observer.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.1 });
+  reveals.forEach(el => observer.observe(el));
+</script>
+</body>
+</html>
